@@ -24,6 +24,7 @@ package org.openjdk.jmc.console.ui.shenandoahvisualizer;
 
 import javax.inject.Inject;
 import org.eclipse.swt.*;
+import org.eclipse.swt.custom.ScrolledComposite;
 import org.eclipse.swt.events.PaintListener;
 import org.eclipse.swt.events.ControlAdapter;
 import org.eclipse.swt.events.ControlEvent;
@@ -55,8 +56,8 @@ import org.openjdk.jmc.rjmx.IConnectionHandle;
 public class ShenandoahVisualizer implements IConsolePageStateHandler {
 	private static final int INITIAL_WIDTH = 1000;
 	private static final int INITIAL_HEIGHT = 800;
+	private static final ScheduledExecutorService SCHED_THREAD_POOL = Executors.newScheduledThreadPool(1);
 	private static int pid;
-	private static final ScheduledExecutorService sched = Executors.newScheduledThreadPool(1);
 	private static Render render;
 	private static Image image;
 	private static GC g;
@@ -87,8 +88,8 @@ public class ShenandoahVisualizer implements IConsolePageStateHandler {
 	}
 
 	public static class Render implements Runnable {
-		public static final int LINE = 20;
-
+		static final int LEGEND_SQUARE_LENGTH = 20;
+		static final int LONGEST_ITEM_LENGTH = getLongestItemLength();
 		DataProvider data;
 		final Group group;
 		int regionWidth, regionHeight;
@@ -201,17 +202,15 @@ public class ShenandoahVisualizer implements IConsolePageStateHandler {
 		}
 
 		public synchronized static void renderLegend(GC g) {
-			final int sqSize = LINE;
 
-			int i = 1;
-
+			int i = 0;
 			for (String key : items.keySet()) {
-				int y = (int) (i * sqSize * 1.5);
+				int y = (int) (i * LEGEND_SQUARE_LENGTH * 1.5);
 				g.setAlpha(100);
-				items.get(key).render(g, 0, y, sqSize, sqSize);
+				items.get(key).render(g, 0, y, LEGEND_SQUARE_LENGTH, LEGEND_SQUARE_LENGTH);
 				g.setForeground(g.getDevice().getSystemColor(SWT.COLOR_BLACK));
 				g.setAlpha(255);
-				g.drawString(key, (int) (sqSize * 1.5), (int) (y + sqSize * 0.1), true);
+				g.drawString(key, (int) (LEGEND_SQUARE_LENGTH * 1.5), (int) (y + LEGEND_SQUARE_LENGTH * 0.1), true);
 				i++;
 			}
 		}
@@ -278,10 +277,10 @@ public class ShenandoahVisualizer implements IConsolePageStateHandler {
 			final int K = 1024;
 
 			g.setForeground(g.getDevice().getSystemColor(SWT.COLOR_BLACK));
-			g.drawText("Status: " + status, 0, 1 * LINE);
-			g.drawText("Total: " + (snapshot.total() / K) + " MB", 0, 2 * LINE, true);
-			g.drawText("Used: " + (snapshot.used() / K) + " MB", 0, 3 * LINE, true);
-			g.drawText("Live: " + (snapshot.live() / K) + " MB", 0, 4 * LINE, true);
+			g.drawText("Status: " + status, 0, 1 * LEGEND_SQUARE_LENGTH);
+			g.drawText("Total: " + (snapshot.total() / K) + " MB", 0, 2 * LEGEND_SQUARE_LENGTH, true);
+			g.drawText("Used: " + (snapshot.used() / K) + " MB", 0, 3 * LEGEND_SQUARE_LENGTH, true);
+			g.drawText("Live: " + (snapshot.live() / K) + " MB", 0, 4 * LEGEND_SQUARE_LENGTH, true);
 		}
 
 		public synchronized void notifyRegionResized(int width, int height) {
@@ -308,6 +307,16 @@ public class ShenandoahVisualizer implements IConsolePageStateHandler {
 			return false;
 		}
 
+		private static int getLongestItemLength() {
+			int longest = 0;
+			for (String item : items.keySet()) {
+				if (item.length() > longest) {
+					longest = item.length();
+				}
+			}
+			return longest;
+		}
+
 	}
 
 	@Override
@@ -318,13 +327,8 @@ public class ShenandoahVisualizer implements IConsolePageStateHandler {
 
 	public void createVisualizer(Composite parent, Rectangle size, ScrolledForm form) throws Exception {
 		Group outerGroup = new Group(parent, SWT.NONE);
-		GridLayout grid = new GridLayout();
-		grid.numColumns = 3;
-
-		grid.makeColumnsEqualWidth = true;
-		GridData groupData = new GridData(SWT.FILL, SWT.FILL, true, true);
-		outerGroup.setLayout(grid);
-		outerGroup.setLayoutData(groupData);
+		outerGroup.setLayout(new GridLayout(3, true));
+		outerGroup.setLayoutData(new GridData(SWT.FILL, SWT.FILL, true, true));
 		outerGroup.setBounds(size);
 		outerGroup.setBackground(Display.getDefault().getSystemColor(SWT.COLOR_WHITE));
 		outerGroup.setBackgroundMode(SWT.INHERIT_FORCE);
@@ -334,7 +338,7 @@ public class ShenandoahVisualizer implements IConsolePageStateHandler {
 		fillLegend();
 		setRender(new Render(outerGroup));
 		createPanels(outerGroup, form);
-		sched.scheduleWithFixedDelay(render, 0, 100, MILLISECONDS);
+		SCHED_THREAD_POOL.scheduleWithFixedDelay(render, 0, 100, MILLISECONDS);
 	}
 
 	public void fillLegend() {
@@ -387,7 +391,6 @@ public class ShenandoahVisualizer implements IConsolePageStateHandler {
 
 		Canvas statusPanel = new Canvas(parent, SWT.NO_BACKGROUND);
 		GridData statusData = new GridData(GridData.FILL, GridData.FILL, false, false);
-
 		statusPanel.setLayoutData(statusData);
 		statusPanel.addPaintListener(new PaintListener() {
 			public void paintControl(PaintEvent e) {
@@ -413,8 +416,9 @@ public class ShenandoahVisualizer implements IConsolePageStateHandler {
 				image.dispose();
 			}
 		});
-
-		Canvas legendPanel = new Canvas(parent, SWT.NO_BACKGROUND);
+		ScrolledComposite scLegend = new ScrolledComposite(parent, SWT.V_SCROLL | SWT.H_SCROLL);
+		scLegend.setLayoutData(new GridData(SWT.FILL, SWT.FILL, true, true));
+		Canvas legendPanel = new Canvas(scLegend, SWT.NO_BACKGROUND);
 		GridData legendData = new GridData(GridData.FILL, GridData.FILL, true, true);
 		legendData.verticalSpan = 2;
 		legendPanel.setLayoutData(legendData);
@@ -423,6 +427,17 @@ public class ShenandoahVisualizer implements IConsolePageStateHandler {
 				render.renderLegend(e.gc);
 			}
 		});
+
+		scLegend.setContent(legendPanel);
+		scLegend.setExpandVertical(true);
+		scLegend.setExpandHorizontal(true);
+		scLegend.setAlwaysShowScrollBars(false);
+
+		double avgCharWidth = g.getFontMetrics().getAverageCharacterWidth();
+		int renderedLegendWidth = (int) (Render.LONGEST_ITEM_LENGTH * avgCharWidth + Render.LEGEND_SQUARE_LENGTH * 1.5
+				+ 20);
+		int renderedLegendHeight = (int) Math.ceil(items.size() * (Render.LEGEND_SQUARE_LENGTH + 1) * 1.5);
+		scLegend.setMinSize(renderedLegendWidth, renderedLegendHeight);
 
 		/*
 		 * An SWT.Resize event isn't called by resizing the form so we manually resize the
@@ -450,7 +465,6 @@ public class ShenandoahVisualizer implements IConsolePageStateHandler {
 				image = new Image(Display.getDefault(), regionsPanel.getBounds().width,
 						regionsPanel.getBounds().height);
 				g = new GC(image);
-
 			}
 		});
 	}

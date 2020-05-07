@@ -137,19 +137,25 @@ public class ShenandoahVisualizer implements IConsolePageStateHandler {
 			if (lastSnapshots.size() < 2) {
 				return;
 			}
-			int pad = 10;
-			int bandHeight = (graphHeight - pad) / 2;
+			int pad = 5;
+			int titleHeight = 20;
+			int bandHeight = (graphHeight - 3 * pad - 2 * titleHeight) / 2;
 			double stepY = 1D * bandHeight / snapshot.total();
 
-			int startDiff = graphHeight;
-			int startRaw = graphHeight - bandHeight - pad;
+			int startDiff = graphHeight - 2;
+			int startRaw = bandHeight + titleHeight + pad - 2;
 
 			g.setBackground(g.getDevice().getSystemColor(SWT.COLOR_WHITE));
 			g.fillRectangle(0, 0, graphWidth, graphHeight);
 
+			g.setForeground(g.getDevice().getSystemColor(SWT.COLOR_BLACK));
+			g.drawText("Heap Metrics Timeline", 0, 0);
+			g.drawText("First Time Derivative", 0, bandHeight + titleHeight + 2 * pad);
+
 			g.setBackground(g.getDevice().getSystemColor(SWT.COLOR_BLACK));
-			g.fillRectangle(0, 0, graphWidth, bandHeight);
-			g.fillRectangle(0, bandHeight + pad, graphWidth, bandHeight);
+			g.fillRectangle(0, titleHeight + pad, graphWidth, bandHeight);
+
+			g.fillRectangle(0, bandHeight + 3 * pad + 2 * titleHeight, graphWidth, bandHeight);
 
 			long firstTime = lastSnapshots.getFirst().time();
 			long lastTime = lastSnapshots.getLast().time();
@@ -177,8 +183,8 @@ public class ShenandoahVisualizer implements IConsolePageStateHandler {
 				default:
 					g.setForeground(g.getDevice().getSystemColor(SWT.COLOR_WHITE));
 				}
-				g.drawRectangle(x, 0, 1, bandHeight);
-				g.drawRectangle(x, bandHeight + pad, 1, bandHeight);
+				g.drawRectangle(x, titleHeight + pad, 1, bandHeight - 1);
+				g.drawRectangle(x, bandHeight + 3 * pad + 2 * titleHeight, 1, bandHeight - 1);
 
 				if (s.used() != 0) {
 					g.setForeground(Colors.USED);
@@ -193,7 +199,7 @@ public class ShenandoahVisualizer implements IConsolePageStateHandler {
 					g.drawRectangle(x, (int) Math.round(startRaw - s.collectionSet() * stepY), 1, 1);
 				}
 				final int smooth = Math.min(10, i + 1);
-				final int mult = 20;
+				final int mult = 10;
 
 				SnapshotView ls = lastSnapshots.get(i - smooth + 1);
 				g.setForeground(Colors.USED);
